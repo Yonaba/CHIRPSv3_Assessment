@@ -1,0 +1,1 @@
+R code for evaluating CHIRPS v3 (RNL and SAT) against CHIRPS v2 using daily rain-gauge observations in Burkina Faso (1998–2020). It covers point-to-pixel accuracy, orographic effects, spatial bias structure (LISA, variograms), Hovmöller diagrams, wavelet coherence, SPI drought indices, and rainy-season onset/cessation metrics.

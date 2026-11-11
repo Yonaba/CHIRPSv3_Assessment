@@ -175,6 +175,6 @@ grob <- ggarrange(pl.mon, pl.ann, nrow = 1, ncol = 2, common.legend = TRUE,
 fig_height <- max(15, 0.6 * n_st + 6)
 
 ggsave(paste0("figures/0_missing_data_", format(START_DATE, "%Y"), "_", format(END_DATE, "%Y"), ".png"),
-       plot = grob, width = 40, height = fig_height, dpi = 400, scale = 0.7, bg = "white")
+       plot = grob, width = 40, height = fig_height, dpi = 500, scale = 0.65, bg = "white")
 
 print("Finished.")

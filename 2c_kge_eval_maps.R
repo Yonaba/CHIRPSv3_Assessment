@@ -291,5 +291,5 @@ legends   <- ggarrange(leg_kge, leg_delta, ncol = 2, widths = c(1, 2))
 fig <- ggarrange(grid_maps, legends, ncol = 1, heights = c(1, 0.04))
 
 ggsave("figures/2_chirps_kge_diff_maps.png", fig,
-       width = 22, height = 26, units = "in", dpi = 350, bg = "white",
+       width = 22, height = 26, units = "in", dpi = 500, bg = "white",
        scale = 0.8)

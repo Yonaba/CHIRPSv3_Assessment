@@ -177,8 +177,8 @@ make_plots <- function(bias_df, x_breaks, x_labels, rotate = FALSE) {
 
 grob_mon <- make_plots(bias_mon, MONTHS, month.abb[MONTHS])
 ggsave("figures/3_hit_bias_decomposition_months.png", plot = grob_mon,
-       width = 20, height = 7.5, units = "in", dpi = 350, bg = "white", scale = 0.8)
+       width = 20, height = 7.5, units = "in", dpi = 500, bg = "white", scale = 0.8)
 
 grob_ann <- make_plots(bias_ann, period, period, rotate = TRUE)
 ggsave("figures/3_hit_bias_decomposition_annual.png", plot = grob_ann,
-       width = 26, height = 7.5, units = "in", dpi = 350, bg = "white", scale = 0.8)
+       width = 26, height = 7.5, units = "in", dpi = 500, bg = "white", scale = 0.8)

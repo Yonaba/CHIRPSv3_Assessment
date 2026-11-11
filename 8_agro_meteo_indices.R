@@ -1,8 +1,28 @@
 # =============================================================================
-# 8_onset_cessation_dryspells.R
-# Onset, cessation, growing season length and dry spells (Sivakumar, 1988)
+# 8b_onset_cessation_dryspells.R
+# Onset, cessation, growing season length and dry spells
+# Onset / cessation after Dunning, Black & Allan (2016, JGR-Atmospheres,
+# doi:10.1002/2016JD025428), annual (monomodal) regime, i.e. the
+# cumulative daily rainfall anomaly method of Liebmann et al. (2012).
 # Observations vs CHIRPS v2, CHIRPS v3 (RNL), CHIRPS v3 (SAT), 1998-2020
-# Output: figures/8_onset_cessation_dryspells.png
+# Outputs: figures/8b_onset_cessation_dryspells.png
+#          outputs/8b_season_metrics_station_year.csv
+#          outputs/8b_season_climatology.csv
+# =============================================================================
+#
+# Method (applied separately to every station x source series):
+#   1. Climatology. Qi = mean rainfall of calendar day i (365 days, 29 Feb
+#      dropped); Qbar = mean(Qi), the climatological mean daily rainfall.
+#      C(d) = cumsum(Qi - Qbar). ds = DOY of min C (start of the climatological
+#      water season), de = DOY of max C (its end).
+#   2. Each year. A(D) = cumsum(Rj - Qbar) for j from ds - 50 to de + 50.
+#      Onset     = day after the minimum of A(D).
+#      Cessation = day of the maximum of A(D), searched after that minimum.
+#   Growing season length = cessation - onset (days).
+#   Dry spells: runs of days with P < rain_thr between onset and cessation,
+#   exactly as in script 8.
+# Qbar is computed per series, so each source is judged against its own
+# climatology (the method is insensitive to systematic rainfall bias).
 # =============================================================================
 
 root_folder <- dirname(rstudioapi::getActiveDocumentContext()$path)
@@ -18,12 +38,14 @@ suppressPackageStartupMessages({
 
 # ----------------------------- Settings --------------------------------------
 years        <- 1998:2020
-rain_thr     <- 1      # mm: a day is "wet" if P >= 1 mm
-onset_acc    <- 20     # mm over 3 consecutive days
-onset_win    <- 30     # days checked after the onset day for dry spells
-onset_maxds  <- 7      # max tolerated dry spell (days) in that window
-cess_win     <- 20     # days without rain after the cessation date
+rain_thr     <- 1      # mm: a day is "wet" if P >= 1 mm (dry spells only)
 min_ds       <- 2      # minimum dry spell length (days) reported
+win_buffer   <- 50     # days added before ds and after de (Dunning et al., annual regime)
+max_na_days  <- 0      # max missing days tolerated in a yearly window; gaps are
+# filled with Qbar (zero anomaly, neutral for A(D))
+drop_edge    <- TRUE   # discard a year if the min/max of A(D) falls on the
+# window boundary (extremum not really resolved)
+harm_ratio_max <- 1    # A2/A1 above this = biannual-looking climatology (warning)
 
 f_stations <- "data/csv/p_stations.csv"
 f_obs      <- "data/csv/p_stations_daily_data.csv"
@@ -83,64 +105,84 @@ extract_chirps <- function(dir) {
       stop(basename(files[i]), ": ", nlyr(r), " bands, expected ", nd)
     p <- if (!terra::same.crs(r, pts)) terra::project(pts, terra::crs(r)) else pts
     ex <- as.matrix(terra::extract(r, p, ID = FALSE))   # stations x bands
-    t(ex)                                        # bands x stations
+    t(ex)                                                # bands x stations
   })
   m <- do.call(rbind, out)
   colnames(m) <- stn_names
   rownames(m) <- as.character(all_dates)
-  m[m < 0] <- NA                                 # nodata (e.g. -9999)
+  m[m < 0] <- NA                                         # nodata (e.g. -9999)
   m
 }
 
 mats <- c(list("Observations" = obs_mat), lapply(chirps_dirs, extract_chirps))
 
-# ----------------------------- Metrics ---------------------------------------
+# ----------------------------- Helpers ---------------------------------------
+is_leap <- function(y) (y %% 4 == 0 & y %% 100 != 0) | y %% 400 == 0
+
 # Day of year with leap-year correction (so 1 Mar = 60 every year)
 doy_norm <- function(d) {
   y <- as.integer(format(d, "%Y")); j <- as.integer(format(d, "%j"))
-  leap <- (y %% 4 == 0 & y %% 100 != 0) | y %% 400 == 0
-  j - (leap & j > 60)
+  j - (is_leap(y) & j > 60)
 }
 
-max_dry_run <- function(wet) {      # longest run of dry days in a logical vector
-  r <- rle(!wet)
-  if (any(r$values)) max(r$lengths[r$values]) else 0L
+# Inverse of doy_norm on the 365-day calendar (29 Feb never returned)
+doy_to_date <- function(y, k) {
+  as.Date(sprintf("%d-01-01", y)) + (k - 1) + (is_leap(y) & k >= 60)
 }
 
-season_metrics <- function(p, dates) {
-  n    <- length(p)
-  wet  <- p >= rain_thr
-  may1 <- which(format(dates, "%m-%d") == "05-01")
-  sep1 <- which(format(dates, "%m-%d") == "09-01")
-  res  <- c(onset = NA, cess = NA, len = NA, mean_ds = NA, max_ds = NA)
+# ----------------------------- Dunning et al. (2016) --------------------------
+# Step 1: climatological water season of one daily series
+season_clim <- function(p, dates) {
+  keep <- format(dates, "%m-%d") != "02-29"
+  Qi   <- tapply(p[keep], doy_norm(dates[keep]), mean, na.rm = TRUE)
+  out  <- list(Qbar = NA_real_, ds = NA_integer_, de = NA_integer_,
+               harm_ratio = NA_real_)
+  if (length(Qi) != 365 || anyNA(Qi)) return(out)
   
-  # Onset: first day after 1 May with >= 20 mm over 3 consecutive days
-  # (that day and the next two) and no dry spell > 7 days in the next 30 days
-  onset <- NA_integer_
-  for (d in may1:(n - onset_win)) {
-    p3 <- p[d:(d + 2)]
-    if (anyNA(p3) || sum(p3) < onset_acc) next
-    w <- wet[(d + 1):(d + onset_win)]
-    if (anyNA(w)) next
-    if (max_dry_run(w) <= onset_maxds) { onset <- d; break }
-  }
+  Qbar <- mean(Qi)                      # climatological mean daily rainfall
+  C    <- cumsum(Qi - Qbar)             # climatological cumulative anomaly
+  f    <- fft(Qi)                       # harmonics: f[2] annual, f[3] semi-annual
+  list(Qbar       = Qbar,
+       ds         = as.integer(which.min(C)),
+       de         = as.integer(which.max(C)),
+       harm_ratio = Mod(f[3]) / Mod(f[2]))
+}
+
+# Step 2: onset, cessation, length and dry spells for one season (year y)
+season_metrics <- function(p, dates, clim, y) {
+  res <- c(onset = NA, cess = NA, len = NA, mean_ds = NA, max_ds = NA)
+  if (is.na(clim$Qbar)) return(res)
   
-  # Cessation: first day on/after 1 Sep followed by 20 days without rain
-  cess <- NA_integer_
-  for (d in sep1:(n - cess_win)) {
-    w <- wet[(d + 1):(d + cess_win)]
-    if (anyNA(w)) next
-    if (!any(w)) { cess <- d; break }
-  }
+  # Window [ds - 50, de + 50]; de may fall in the next year if the
+  # climatological season spans 31 December
+  y_end <- if (clim$de > clim$ds) y else y + 1L
+  i_s <- match(doy_to_date(y,     clim$ds), dates) - win_buffer
+  i_e <- match(doy_to_date(y_end, clim$de), dates) + win_buffer
+  if (is.na(i_s) || is.na(i_e) || i_s < 1 || i_e > length(p)) return(res)
   
-  if (is.na(onset) || is.na(cess) || cess <= onset) return(res)
+  w  <- i_s:i_e
+  pw <- p[w]
+  na <- is.na(pw)
+  if (sum(na) > max_na_days) return(res)
+  pw[na] <- clim$Qbar
+  
+  A    <- cumsum(pw - clim$Qbar)        # yearly cumulative anomaly A(D)
+  n    <- length(A)
+  imin <- which.min(A)
+  if (imin >= n - 1) return(res)
+  imax <- imin + which.max(A[(imin + 1):n])
+  if (drop_edge && (imin == 1 || imax == n)) return(res)
+  
+  onset <- w[imin] + 1L                 # day AFTER the minimum
+  cess  <- w[imax]                      # day OF the maximum
+  if (cess <= onset) return(res)
   
   res["onset"] <- doy_norm(dates[onset])
   res["cess"]  <- doy_norm(dates[cess])
   res["len"]   <- cess - onset
   
   # Dry spells >= 2 days between onset and cessation (NA days are not dry)
-  dry <- !wet[onset:cess]
+  dry <- !(p[onset:cess] >= rain_thr)
   dry[is.na(dry)] <- FALSE
   r  <- rle(dry)
   ds <- r$lengths[r$values & r$lengths >= min_ds]
@@ -151,20 +193,34 @@ season_metrics <- function(p, dates) {
   res
 }
 
-year_idx <- split(seq_along(all_dates), format(all_dates, "%Y"))
-
+# ----------------------------- Metrics ---------------------------------------
+clim_tab <- list()
 metrics <- do.call(rbind, lapply(names(mats), function(s) {
   m <- mats[[s]]
   do.call(rbind, lapply(stn_names, function(st) {
-    do.call(rbind, lapply(names(year_idx), function(y) {
-      i <- year_idx[[y]]
-      data.frame(Source = s, Station = st, Year = as.integer(y),
-                 t(season_metrics(m[i, st], all_dates[i])),
+    cl <- season_clim(m[, st], all_dates)
+    clim_tab[[length(clim_tab) + 1]] <<- data.frame(
+      Source = s, Station = st, Qbar = cl$Qbar, ds = cl$ds, de = cl$de,
+      harm_ratio = cl$harm_ratio)
+    do.call(rbind, lapply(years, function(y) {
+      data.frame(Source = s, Station = st, Year = y,
+                 t(season_metrics(m[, st], all_dates, cl, y)),
                  row.names = NULL)
     }))
   }))
 }))
 metrics$Source <- factor(metrics$Source, levels = src_levels)
+clim_tab <- do.call(rbind, clim_tab)
+
+bimodal <- clim_tab[!is.na(clim_tab$harm_ratio) & clim_tab$harm_ratio > harm_ratio_max, ]
+if (nrow(bimodal) > 0)
+  warning("Harmonic ratio A2/A1 > ", harm_ratio_max,
+          " (not clearly monomodal) for: ",
+          paste(bimodal$Source, bimodal$Station, sep = " / ", collapse = "; "))
+
+dir.create("outputs", showWarnings = FALSE)
+write.csv(metrics,  "outputs/8b_season_metrics_station_year.csv", row.names = FALSE)
+write.csv(clim_tab, "outputs/8b_season_climatology.csv",         row.names = FALSE)
 
 # Per-year values: mean across stations (one value per source and year)
 yearly <- aggregate(cbind(onset, cess, len, mean_ds, max_ds) ~ Source + Year,
@@ -208,9 +264,9 @@ make_panel <- function(var, title, ylab, show_x = TRUE) {
 
 # Layout is 2 x 3 with an empty slot (row 2, col 3): the bottom-most panels are
 # d (col 1), e (col 2) and c (col 3); only a and b hide their x text.
-p_a <- make_panel("onset",   "a) Onset date",              "DOY", show_x = FALSE)
-p_b <- make_panel("cess",    "b) Cessation date",          "DOY", show_x = FALSE)
-p_c <- make_panel("len",     "c) Growing season length",   "Days")
+p_a <- make_panel("onset",   "a) Onset date",               "DOY", show_x = FALSE)
+p_b <- make_panel("cess",    "b) Cessation date",           "DOY", show_x = FALSE)
+p_c <- make_panel("len",     "c) Growing season length",    "Days")
 p_d <- make_panel("mean_ds", "d) Dry spell duration (avg)", "Days")
 p_e <- make_panel("max_ds",  "e) Longest dry spell (avg)",  "Days")
 
@@ -218,5 +274,5 @@ fig <- wrap_plots(p_a, p_b, p_c, p_d, p_e, nrow = 2, ncol = 3)
 
 dir.create("figures", showWarnings = FALSE)
 ggsave("figures/8_onset_cessation_dryspells.png", fig,
-       width = 24, height = 14, units = "in",
-       dpi = 350, bg = "white", scale = 0.8)
+       width = 25, height = 14, units = "in",
+       dpi = 500, bg = "white", scale = 0.8)

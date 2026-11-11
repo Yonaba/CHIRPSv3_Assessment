@@ -261,7 +261,7 @@ fig <- wrap_plots(panels, ncol = 3, nrow = 2) +
 
 png_dev <- if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png else "png"
 ggsave(file.path(dir_fig, "4_geo_control_relative_bias.png"), fig,
-       width = 11, height = 7, dpi = 300, device = png_dev, bg = "white")
+       width = 11, height = 7, dpi = 500, device = png_dev, bg = "white")
 
 # ---- 7. Regression table (simple + multiple, to isolate confounding) ---------
 term_lab <- c("(Intercept)" = "Intercept",

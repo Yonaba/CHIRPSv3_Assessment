@@ -183,7 +183,7 @@ fig1 <- ggarrange(plotlist = ts.panels, nrow = 2, ncol = 2, align = "hv",
                   common.legend = TRUE, legend = "bottom")
 
 ggsave("figures/7_spi_timeseries.png", plot = fig1,
-       width = 20, height = 12, units = "in", dpi = 350, scale = 0.8, bg = "white")
+       width = 20, height = 12, units = "in", dpi = 500, scale = 0.8, bg = "white")
 
 # ---------------------------------------------------------------- Figure 2: correlation heatmaps
 res <- do.call(rbind, lapply(spi.scales, function(s) {
@@ -233,6 +233,6 @@ fig2 <- ggarrange(plotlist = hm.panels, nrow = 1, ncol = 3, align = "hv",
                   common.legend = TRUE, legend = "bottom")
 
 ggsave("figures/7_spi_correlation_heatmaps.png", plot = fig2,
-       width = 22, height = 7, units = "in", dpi = 350, scale = 0.8, bg = "white")
+       width = 22, height = 7, units = "in", dpi = 500, scale = 0.8, bg = "white")
 
 print("finished.")

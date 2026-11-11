@@ -187,5 +187,5 @@ for (cp in seq_along(btypes)) {
 grob <- ggarrange(plotlist = plist, nrow = 2, ncol = 3)
 
 ggsave("figures/3_chirps_hit_miss_false_biases.png", plot = grob,
-       width = 22, height = 12, dpi = 350, scale = 0.75, bg = "white")
+       width = 22, height = 12, dpi = 500, scale = 0.75, bg = "white")
 

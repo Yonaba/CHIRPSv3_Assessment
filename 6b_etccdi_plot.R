@@ -139,5 +139,5 @@ plots <- lapply(seq_along(ind_order), function(k) {
 
 fig <- ggarrange(plotlist = plots, ncol = n_col, nrow = n_row)
 
-ggsave(fig_file, fig, width = 24, height = 26, units = "in", dpi = 300, bg = "white")
+ggsave(fig_file, fig, width = 24, height = 26, units = "in", dpi = 500, bg = "white")
 message("Done: ", fig_file)

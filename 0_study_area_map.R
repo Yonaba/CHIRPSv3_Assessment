@@ -331,4 +331,4 @@ fig <- ggarrange(p_map, right_col, ncol = 2, widths = c(2.3, 1))
 
 dir.create("figures", showWarnings = FALSE)
 ggsave(f_out, fig, width = 16, height = 8.5, units = "in",
-       dpi = 350, scale = 0.8, bg = "white")
+       dpi = 500, scale = 0.8, bg = "white")

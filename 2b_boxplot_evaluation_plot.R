@@ -254,4 +254,4 @@ fig <- ggarrange(plotlist = plots, ncol = n_col, nrow = n_row)
 fig_width  <- 38
 fig_height <- 26
 ggsave("figures/2_chirps_metrics_multiscale.png", fig,
-       width = fig_width, height = fig_height, units = "in", dpi = 300, bg = "white")
+       width = fig_width, height = fig_height, units = "in", dpi = 500, bg = "white")

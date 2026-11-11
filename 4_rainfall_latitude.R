@@ -282,5 +282,5 @@ fig <- ggarrange(plotlist = plots, ncol = 2, nrow = 2,
                  common.legend = TRUE, legend = "bottom")
 
 ggsave("figures/4_rainfall_latitude_time.png", fig,
-       width = 24, height = 12, units = "in", dpi = 350, bg = "white",
+       width = 24, height = 12, units = "in", dpi = 500, bg = "white",
        scale = 0.6)

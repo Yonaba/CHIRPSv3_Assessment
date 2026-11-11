@@ -161,4 +161,4 @@ fig <- ggarrange(plotlist = panels, ncol = 3, nrow = 1,
                  common.legend = TRUE, legend = "bottom")
 
 ggsave("figures/3_chirps_categorical_scores.png", fig,
-       width = 15, height = 5.5, units = "in", dpi = 350, bg = "white", scale = 0.95)
+       width = 15, height = 5.5, units = "in", dpi = 500, bg = "white", scale = 0.95)

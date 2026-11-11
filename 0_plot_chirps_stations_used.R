@@ -129,6 +129,6 @@ col_v3 <- make_column("v3", "b) Stations in CHIRPS v3\n", left_col = FALSE)
 fig <- ggarrange(col_v2, col_v3, ncol = 2, widths = c(1.05, 1))
 
 ggsave(out_png, fig, width = 18, height = 11, units = "in",
-       dpi = 350, scale = 0.8, bg = "white")
+       dpi = 500, scale = 0.8, bg = "white")
 
 message("Figure saved to ", out_png)

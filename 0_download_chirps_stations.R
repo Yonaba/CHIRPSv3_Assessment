@@ -12,7 +12,7 @@ Sys.setenv(TZ = "UTC")
 #   v2: https://data.chc.ucsb.edu/products/CHIRPS/v2.0/diagnostics/
 #       list_of_stations_used/monthly/global.stationsUsed.YYYY.MM.csv
 #       + extra.stationsUsed.YYYY.MM.csv (stations added after the 2015
-#         release; only exists for some months)
+#         release; only published for 2016.01 - 2019.12)
 # -----------------------------------------------------------------------------
 
 library(data.table)
@@ -25,21 +25,26 @@ target_country <- "Burkina_Faso"
 max_tries      <- 3       # retries per file
 overwrite      <- FALSE   # re-download files already on disk?
 
+# Each version lists its file patterns. Optional per-type date windows
+# (YYYYMM, inclusive) restrict which months are requested from the server;
+# types without a window are requested for every year x month.
 versions <- list(
   v3 = list(
     base_url = "https://data.chc.ucsb.edu/products/CHIRPS/v3.0/diagnostics/list_of_stations_used/monthly",
     patterns = c(global = "global.stationsUsed.v3.%d.%02d.csv"),
+    windows  = list(),
     optional = character(0)
   ),
   v2 = list(
     base_url = "https://data.chc.ucsb.edu/products/CHIRPS/v2.0/diagnostics/list_of_stations_used/monthly",
     patterns = c(global = "global.stationsUsed.%d.%02d.csv",
                  extra  = "extra.stationsUsed.%d.%02d.csv"),
-    optional = "extra"    # missing "extra" files are expected, not errors
+    windows  = list(extra = c(from = 201601L, to = 201912L)),
+    optional = "extra"    # tolerate an occasional gap inside the window
   )
 )
 
-options(timeout = max(100, getOption("timeout")))
+options(timeout = max(500, getOption("timeout")))
 
 # ---- Helper: download one file with retries ---------------------------------
 download_one <- function(url, dest, max_tries = 3) {
@@ -72,18 +77,33 @@ filter_country <- function(dt, country) {
   dt[norm(get(col)) == norm(country)]
 }
 
+# ---- Helper: build the list of files to request -----------------------------
+build_grid <- function(cfg, out_dir) {
+  grid <- CJ(year = years, month = months, type = names(cfg$patterns))
+  grid[, ym := year * 100L + month]
+  
+  # Drop months outside each type's publication window (no server request)
+  for (tp in names(cfg$windows)) {
+    w <- cfg$windows[[tp]]
+    grid <- grid[type != tp | (ym >= w[["from"]] & ym <= w[["to"]])]
+  }
+  
+  grid[, fname := sprintf(cfg$patterns[type], year, month), by = type]
+  grid[, url   := file.path(cfg$base_url, fname)]
+  grid[, dest  := file.path(out_dir, fname)]
+  grid[, status := NA_character_]
+  grid[, ym := NULL]
+  setorder(grid, year, month, type)
+  grid[]
+}
+
 # ---- Main routine: download + aggregate one version -------------------------
 process_version <- function(version, cfg) {
   out_dir    <- file.path(stations_dir, version)
   merged_csv <- file.path(stations_dir, sprintf("chirps_stations_%s.csv", version))
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   
-  # File list: one row per year x month x file type
-  grid <- CJ(year = years, month = months, type = names(cfg$patterns))
-  grid[, fname := sprintf(cfg$patterns[type], year, month), by = type]
-  grid[, url   := file.path(cfg$base_url, fname)]
-  grid[, dest  := file.path(out_dir, fname)]
-  grid[, status := NA_character_]
+  grid <- build_grid(cfg, out_dir)
   
   # Download loop
   n <- nrow(grid)
